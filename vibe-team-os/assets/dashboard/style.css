@@ -1,0 +1,310 @@
+/* 대시보드 공통 스타일 — 화면 여러 개가 같이 쓴다.
+   화면마다 복붙하면 한쪽만 고쳐져 반드시 어긋난다. */
+  :root{
+    --line-soft:#f0ede8;
+    --ink:#1a1917; --dim:#6f6b64; --faint:#9a958c;
+    /* 신호색. 강조(--emphasis)와 다른 것이다 —
+       강조는 "여기가 중요하다", 신호는 "여기에 문제가 있다"를 말한다.
+       그래서 개수 제한(화면당 1개)의 대상이 아니다. */
+    --signal-attention:#9c5f27;   /* 확인이 필요함 */
+    --signal-alarm:#993030;       /* 방치되면 나빠짐 */
+    --ease:cubic-bezier(.16,1,.3,1);
+
+    /* ── 레퍼런스에서 뽑은 토큰 (1차: 카드) ──
+       원칙 ① 배경은 순백이 아니고, 흰색은 표면에만 쓴다
+       원칙 ② 그림자로 나누지 않는다 — 명도차와 여백으로 나눈다
+       원칙 ③ 강조는 색이 아니라 검정 하나다 */
+    --canvas:#f7f3ea;          /* 크림. 화면 바탕 */
+    --surface:#ffffff;         /* 표면. 카드만 */
+    --hairline:#e8e3d6;        /* 면 경계. 구조가 아니라 윤곽만 */
+    --emphasis:#111111;        /* 강조 1개. 색이 아님 */
+    /* 분류 팔레트. 명도가 서로 같다 — 종류를 말하지 중요도를 말하지 않는다.
+       지금은 주제마다 색을 나눌 방법이 없어 --cat-1 하나만 쓴다. */
+    --cat-1:#e4ddf7; --cat-2:#fbdcea; --cat-3:#c9ddf7;
+    --cat-4:#fbe96b; --cat-5:#cfe9dc;
+    --cat-ink:#2b2733;         /* 파스텔 위에 얹는 글자 */
+    --radius-card:12px;
+    --pad-card:20px 24px;      /* 레퍼런스 환산 ≈24 */
+    --gap-card:12px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --line-soft:#232329;
+      --ink:#eeecf1; --dim:#9d99a5; --faint:#6f6b78;
+      --signal-attention:#dda56b; --signal-alarm:#dd8484;
+
+      /* 어두운 쪽도 같은 규칙 — 바탕과 표면은 다른 색이다 */
+      --canvas:#131317; --surface:#1e1e24; --hairline:#2f2f37; --emphasis:#eeecf1;
+      /* 어두운 쪽에서도 분류색끼리 명도가 같아야 한다 */
+      --cat-1:#39344a; --cat-2:#46323d; --cat-3:#2c3a4d;
+      --cat-4:#4a4526; --cat-5:#2c4038;
+      --cat-ink:#e6e2ef;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--canvas);color:var(--ink);
+    font-family:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo',system-ui,sans-serif;
+    font-size:15px;line-height:1.7;font-weight:400;
+    word-break:keep-all;              /* 한글이 단어 중간에서 잘리지 않게 */
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums}   /* 숫자가 자리에서 흔들리지 않게 */
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px 80px}
+
+  /* ── 머리말 ── */
+  /* 유리 효과와 하단 구분선을 뺐다.
+     레퍼런스 어디에도 backdrop-blur 가 없고, 헤더와 본문은 선이 아니라 여백으로 나뉜다.
+     불투명 배경이라 스크롤해도 아래 내용이 비쳐 보이지 않는다. */
+  header{
+    position:sticky;top:0;z-index:40;background:var(--canvas);
+    padding:16px 0;margin-bottom:32px
+  }
+  .bar{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .brand{font-weight:700;font-size:17px;letter-spacing:-.02em}
+  .phase{
+    font-size:12px;font-weight:500;padding:3px 10px;border-radius:99px;
+    color:var(--dim);background:var(--surface);border:1px solid var(--hairline)
+  }
+  .who{display:flex;gap:14px;margin-left:auto;flex-wrap:wrap}
+  .who span{font-size:13px;font-weight:500;color:var(--dim);white-space:nowrap}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:1.5px}
+  /* 작업 중 = 검정. 레퍼런스는 활성을 늘 검정으로 표시한다 */
+  .on{background:var(--emphasis);box-shadow:0 0 0 3px color-mix(in srgb,var(--emphasis) 14%,transparent)}
+  .off{background:var(--faint)} .wait{background:var(--signal-attention)}
+
+  /* ── 경고 — 조용한 실패를 막는 자리 ── */
+  .alerts{margin-bottom:26px;display:grid;gap:9px}
+  /* 그림자를 뺐다. 왼쪽 줄은 남긴다 —
+     레퍼런스에 경고 컴포넌트가 없어 비교 대상이 없고,
+     이 도구는 경고가 안 보이면 존재 이유가 없다. 규칙보다 그게 우선이다. */
+  .alert{
+    background:var(--surface);border:1px solid var(--hairline);
+    border-left:2.5px solid var(--signal-attention);
+    border-radius:var(--radius-card);padding:14px 18px
+  }
+  .alert.info{border-left-color:var(--faint)}
+  .alert b{display:block;font-weight:600;font-size:14.5px;margin-bottom:3px;text-wrap:balance}
+  .alert p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.6}
+  .alert .do{margin-top:7px;font-size:13.5px;font-weight:500;color:var(--emphasis)}
+
+  /* ── 브리핑 자리 ── */
+  .brief-slot{
+    border:1px dashed var(--hairline);border-radius:var(--radius-card);padding:16px 18px;
+    color:var(--faint);font-size:13.5px;margin-bottom:28px;background:var(--line-soft)
+  }
+
+  .cols{display:grid;grid-template-columns:1fr 296px;gap:32px;align-items:start}
+  @media (max-width:860px){ .cols{grid-template-columns:1fr;gap:26px} }
+
+  /* ── 피드 카드 ── */
+  .card{
+    background:var(--surface);border:1px solid var(--hairline);
+    border-radius:var(--radius-card);
+    padding:var(--pad-card);margin-bottom:var(--gap-card);
+    /* 그림자 없음. 바탕(크림)과 표면(흰색)의 명도차가 카드를 띄운다 */
+    transition:border-color .35s var(--ease);
+    animation:rise .5s var(--ease) both;animation-delay:calc(var(--i,0)*45ms)
+  }
+  .card:hover{border-color:var(--emphasis)}
+  @keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){ .card{animation:none;transition:none} }
+
+  .meta{display:flex;gap:9px;align-items:center;flex-wrap:wrap;
+    font-size:12.5px;font-weight:500;color:var(--dim);margin-bottom:8px}
+  /* 분류 태그 — 색면. 레퍼런스는 분류를 파스텔 면으로 칠한다 */
+  .tag{font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:99px;
+    border:1px solid transparent;background:var(--cat-1);color:var(--cat-ink)}
+  /* 주제마다 색이 고정된다 (app.js 의 cat()). 다섯 색의 명도가 같아서
+     어느 것도 더 중요해 보이지 않는다 — 종류만 말한다 */
+  .tag.c1{background:var(--cat-1)} .tag.c2{background:var(--cat-2)}
+  .tag.c3{background:var(--cat-3)} .tag.c4{background:var(--cat-4)}
+  .tag.c5{background:var(--cat-5)}
+  /* 상태 칩 — 저대비 외곽선. 분류와 형태가 같으면 안 되므로 면을 비운다 */
+  .t-결정됨,.t-논의중,.t-보류,.t-폐기{
+    background:transparent;border-color:var(--hairline);color:var(--dim)}
+  .card h3{margin:0 0 7px;font-size:16.5px;font-weight:600;line-height:1.5;
+    letter-spacing:-.011em;text-wrap:balance}
+  .card.dead h3{text-decoration:line-through;text-decoration-thickness:1px;color:var(--faint)}
+  .why{margin:0;color:var(--dim);font-size:14.5px;line-height:1.68;max-width:64ch}
+  .need{margin:0;color:var(--signal-attention);font-size:14px;font-weight:500}
+  .foot{margin-top:11px;padding-top:10px;border-top:1px solid var(--line-soft);
+    font-size:12.5px;color:var(--faint);display:flex;gap:14px;flex-wrap:wrap}
+  .q{color:var(--signal-attention);font-weight:500}
+
+  /* ── 곁줄 ── */
+  aside section{margin-bottom:28px}
+  /* 한글에는 uppercase 가 아무 일도 하지 않는다. 지운다 */
+  aside h4{margin:0 0 11px;font-size:11.5px;font-weight:600;
+    letter-spacing:.06em;color:var(--faint)}
+  .qitem{border-left:2px solid var(--hairline);padding:1px 0 1px 12px;margin-bottom:13px;
+    font-size:14px;line-height:1.6;transition:border-color .3s var(--ease)}
+  .qitem:hover{border-left-color:var(--dim)}
+  .qitem.hot{border-left-color:var(--signal-alarm)}
+  .qitem small{display:block;color:var(--faint);font-size:12.5px;margin-top:3px;line-height:1.55}
+  .row{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:13.5px;padding:4px 0;color:var(--dim)}
+  .row b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .row.total{margin-top:7px;padding-top:9px;border-top:1px solid var(--line-soft)}
+  .empty{color:var(--faint);font-size:14px}
+
+  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--hairline);
+    font-size:12.5px;color:var(--faint)}
+
+/* ── 화면 이동 ──
+   7개 탭은 많다. 매일 쓰는 셋만 앞에 두고 나머지는 뒤로 민다 (08-와이어프레임 1장).
+   병합 전에는 PRD·기여를 숨기지 않고 회색으로 둔다 — 나중에 생긴다는 걸 알게 하려고. */
+nav.tabs{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
+/* 알약 형태. 레퍼런스의 상단 내비는 전부 radius full 이다.
+   활성은 흰 면 — 크림 바탕 위에서 떠오른다. 검정은 거르개가 이미 쓰고 있어
+   여기까지 검정을 쓰면 한 화면에 강조가 둘이 된다. */
+nav.tabs a,nav.tabs span{
+  font-size:13px;font-weight:500;color:var(--dim);text-decoration:none;
+  padding:6px 13px;border-radius:99px;white-space:nowrap;
+  border:1px solid transparent;
+  transition:background .2s var(--ease),color .2s var(--ease),border-color .2s var(--ease)}
+nav.tabs a:hover{color:var(--ink);border-color:var(--hairline)}
+nav.tabs a[aria-current]{
+  color:var(--ink);font-weight:600;background:var(--surface);border-color:var(--hairline)}
+nav.tabs span{color:var(--faint);cursor:not-allowed}
+
+/* ── 거르개 ── */
+.filters{display:flex;gap:18px;align-items:center;flex-wrap:wrap;
+  padding-bottom:14px;margin-bottom:18px;border-bottom:1px solid var(--hairline)}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{font-size:13px;font-weight:500;padding:5px 12px;border-radius:99px;
+  border:1px solid var(--hairline);background:var(--surface);color:var(--dim);cursor:pointer;
+  font-family:inherit;
+  transition:background .2s var(--ease),border-color .2s var(--ease),color .2s var(--ease)}
+.chip:hover{border-color:var(--dim);color:var(--ink)}
+/* 눌린 상태 = 검정 채움. 강조는 색이 아니라 검정 하나다 */
+.chip[aria-pressed="true"]{background:var(--emphasis);border-color:var(--emphasis);color:var(--surface)}
+.chip .n{font-variant-numeric:tabular-nums;opacity:.65;margin-left:5px}
+.chip.alarm[aria-pressed="false"]{color:var(--signal-alarm);
+  border-color:color-mix(in srgb,var(--signal-alarm) 35%,transparent)}
+/* 검색은 알약이다. 레퍼런스의 인풋은 전부 radius full */
+.search{font-size:14px;font-family:inherit;padding:7px 16px;border-radius:99px;
+  border:1px solid var(--hairline);background:var(--surface);color:var(--ink);min-width:190px}
+.search:focus{outline:2px solid color-mix(in srgb,var(--emphasis) 35%,transparent);outline-offset:1px}
+.count{font-size:13px;color:var(--faint);margin-bottom:14px}
+
+/* ── 목록 카드 ── */
+a.card{display:block;color:inherit;text-decoration:none}
+a.card:hover h3{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+.card.att{border-left:2.5px solid var(--signal-alarm)}
+
+/* ── 상세 ── */
+/* 원본 기록으로 가는 링크. 답은 그 기록 안에 붙어야 맥락이 안 사라진다 */
+.src{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--hairline)}
+.src:hover{color:var(--ink);border-bottom-color:var(--emphasis)}
+.back{display:inline-block;font-size:13.5px;color:var(--dim);text-decoration:none;margin-bottom:20px}
+.back:hover{color:var(--ink)}
+.detail h1{font-size:25px;font-weight:700;line-height:1.4;letter-spacing:-.02em;
+  margin:0 0 12px;text-wrap:balance}
+.detail .stamp{font-size:13px;color:var(--faint);margin-bottom:26px;
+  display:flex;gap:11px;align-items:center;flex-wrap:wrap}
+.block{margin-bottom:26px}
+.block h2{font-size:11.5px;font-weight:600;letter-spacing:.06em;color:var(--faint);
+  text-transform:uppercase;margin:0 0 9px}
+.quote{background:var(--line-soft);border-radius:11px;padding:15px 18px;
+  font-size:15.5px;line-height:1.65;white-space:pre-wrap}
+.rows{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;font-size:14.5px;line-height:1.65}
+.rows dt{color:var(--faint);white-space:nowrap}
+.rows dd{margin:0}
+.rows dd.blank{color:var(--signal-attention)}
+.prose{font-size:15px;line-height:1.75;white-space:pre-wrap;max-width:70ch}
+.prose code{background:var(--line-soft);padding:1px 5px;border-radius:5px;font-size:.88em}
+.qa{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:14.5px;line-height:1.65}
+.qa b{color:var(--faint);font-weight:600}
+.oq{margin:0;padding-left:18px;font-size:14.5px;line-height:1.7;color:var(--signal-attention)}
+.fix{background:var(--line-soft);border:1px solid var(--hairline);border-radius:var(--radius-card);
+  padding:14px 17px;font-size:13.5px;color:var(--dim);line-height:1.65}
+.fix code{background:var(--surface);padding:2px 7px;border-radius:6px;
+  border:1px solid var(--hairline);font-size:.92em}
+
+/* ── 시스템 상태 ──
+   상태는 셋뿐이다 — 정상 / 문제 / 모름.
+   모름을 정상으로 칠하지 않는 것이 이 화면의 존재 이유다. */
+.stat{display:grid;gap:2px}
+.srow{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
+  border-radius:var(--radius-card);background:var(--surface);
+  border:1px solid var(--hairline)}
+.srow b{display:block;font-size:14.5px;font-weight:600;line-height:1.5}
+.srow small{display:block;font-size:13px;color:var(--dim);line-height:1.55}
+.srow small.act{color:var(--emphasis);font-weight:500;margin-top:3px}
+.mark{width:7px;height:7px;border-radius:50%;margin-top:7px;flex:0 0 auto}
+.s-ok  .mark{background:var(--emphasis)}
+.s-bad .mark{background:var(--signal-attention)}
+.s-idk .mark{background:var(--faint)}
+.s-bad{border-left:2.5px solid var(--signal-attention)}
+
+/* ── 이력 ──
+   판단 변경(◈)을 결정(◆)과 기호로 나눈다.
+   발표에서 제일 잘 먹히는 대목인데 결정에 섞이면 묻힌다. */
+.ev{display:grid;grid-template-columns:44px 20px 1fr;gap:10px;align-items:start;
+  padding:9px 0;animation:rise .5s var(--ease) both;animation-delay:calc(var(--i,0)*35ms)}
+.ev .when{font-size:12.5px;color:var(--faint);padding-top:3px;text-align:right}
+.ev .pip{font-size:13px;color:var(--faint);text-align:center;padding-top:2px;
+  position:relative}
+/* 점끼리 잇는 세로선. 선으로 구조를 나누는 게 아니라 시간의 연속을 보여준다 */
+.ev .pip::after{content:"";position:absolute;left:50%;top:20px;bottom:-18px;
+  width:1px;background:var(--hairline);transform:translateX(-50%)}
+.ev:last-child .pip::after{display:none}
+.ev .body{font-size:14.5px;line-height:1.6}
+.ev .body b{font-weight:600}
+.ev .body small{display:block;font-size:12.5px;color:var(--faint);margin-top:2px}
+.ev .who2{font-size:12.5px;color:var(--dim);margin-right:7px}
+.ev .kind{font-size:11.5px;color:var(--faint);border:1px solid var(--hairline);
+  border-radius:99px;padding:1px 7px;margin-right:7px}
+.k-decide .pip,.k-turn .pip{color:var(--ink)}
+.k-turn .kind{color:var(--emphasis);border-color:var(--emphasis)}
+.k-drop .body a{text-decoration:line-through;color:var(--faint)}
+@media (prefers-reduced-motion:reduce){ .ev{animation:none} }
+
+/* ── PRD 뷰어 ── */
+.prd-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:26px}
+.prd-head h1{font-size:25px;font-weight:700;letter-spacing:-.02em;margin:0}
+.prd-cols{display:grid;grid-template-columns:210px 1fr;gap:36px;align-items:start}
+@media (max-width:860px){ .prd-cols{grid-template-columns:1fr;gap:22px} }
+.toc{position:sticky;top:84px;display:grid;gap:1px}
+.toc-item{display:block;font-size:13.5px;color:var(--dim);text-decoration:none;
+  padding:5px 10px;border-radius:8px;line-height:1.5}
+.toc-item:hover{background:var(--line-soft);color:var(--ink)}
+.toc-item .num{color:var(--faint);margin-right:5px}
+.toc-item.untracked{color:var(--signal-attention)}
+.prd-item{padding-bottom:28px;margin-bottom:28px;border-bottom:1px solid var(--line-soft)}
+.prd-item:last-child{border-bottom:0}
+.prd-item h2{font-size:18px;font-weight:600;line-height:1.5;margin:0 0 11px;
+  letter-spacing:-.012em;text-wrap:balance}
+.prd-item h2 .num{color:var(--faint);margin-right:7px;font-weight:500}
+/* 출처 배지. 읽는 흐름을 끊지 않게 본문 위에 얇게 얹는다 */
+.who-box{background:var(--surface);border:1px solid var(--hairline);
+  border-radius:var(--radius-card);padding:11px 14px;margin-bottom:13px;font-size:13.5px}
+.who-box .rows{gap:4px 14px}
+.who-box.miss{border-left:2.5px solid var(--signal-attention)}
+.who-box.miss b{display:block;font-size:14px;font-weight:600}
+.who-box.miss small{color:var(--dim);font-size:13px}
+
+/* ── 기여도 ── */
+.tablewrap{overflow-x:auto}
+.grid{width:100%;border-collapse:collapse;font-size:13.5px;min-width:560px}
+.grid th{text-align:left;font-size:11.5px;font-weight:600;color:var(--faint);
+  letter-spacing:.05em;padding:0 12px 9px;border-bottom:1px solid var(--hairline)}
+.grid td{padding:11px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.grid tr:last-child td{border-bottom:0}
+.miss-row td{color:var(--signal-attention)}
+.fold{margin-top:32px}
+.fold summary{cursor:pointer;font-size:13.5px;font-weight:500;color:var(--dim);
+  padding:8px 0;list-style:none}
+.fold summary::before{content:"▸ ";color:var(--faint)}
+.fold[open] summary::before{content:"▾ "}
+.fold summary:hover{color:var(--ink)}
+.pbar{margin:16px 0}
+.prow{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:14px;margin-bottom:6px}
+.prow span{font-size:12.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+/* 막대는 순위가 아니다. 그래서 색을 주지 않고 굵기도 얇게 둔다 */
+.track{height:6px;border-radius:99px;background:var(--line-soft);overflow:hidden}
+.track i{display:block;height:100%;background:var(--faint);border-radius:99px}
+.pbar small{display:block;font-size:12.5px;color:var(--faint);margin-top:6px}

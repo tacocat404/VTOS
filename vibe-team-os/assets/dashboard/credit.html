@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="PRD 항목마다 누가 냈는지, 추적률이 얼마인지 봅니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◑</text></svg>">
+<title>기여</title>
+
+<!-- Pretendard. 못 받아오면 시스템 한글 글꼴로 물러선다 (file:// 로 열 때) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<!--
+  기여도 — 항목 중심이 기본, 사람별은 접어둔다 (docs/08-와이어프레임.md 7장)
+
+  왜 항목 중심이 기본인가 —
+  막대그래프를 첫 화면에 띄우면 **막대 길이가 곧 서열이 된다.**
+  합류 시점이 제각각인데 늦게 온 사람이 짧은 막대를 보면 위축된다.
+  개인 기여는 발표물의 개인 리포트에서 각자 본다. 거기서는 남과 비교되지 않는다.
+
+  추적률을 그대로 노출한다. 못 찾은 항목이 보여야 보정할 수 있다.
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header><div class="bar" id="bar"></div></header>
+  <main id="main" aria-label="기여 현황"></main>
+  <footer id="foot"></footer>
+</div>
+
+<script src="data/dashboard.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var D = T.D, esc = T.esc, ago = T.ago;
+  var $ = function (id) { return document.getElementById(id); };
+
+  $("bar").innerHTML = T.nav("credit.html");
+  if (!T.guard("main")) return;
+
+  T.run("main", function () {
+    var prd = D.prd;
+    if (!prd) {
+      $("main").innerHTML =
+        '<p class="empty">아직 PRD 가 없습니다. 기획을 합치면 여기에 생깁니다.</p>';
+      return;
+    }
+
+    var who = {};
+    (D.members || []).forEach(function (m) { who[m.name] = m.display; });
+    var name = function (n) { return esc(who[n] || n); };
+
+    // ── 항목 중심 (기본) ──
+    var rows = prd.items.map(function (it) {
+      if (it.untracked) {
+        return '<tr class="miss-row"><td><span class="num">' + esc(it.no) + "</span> " +
+          esc(it.title) + '</td><td colspan="2">못 찾음</td>' +
+          "<td>연결된 기록이 없습니다</td></tr>";
+      }
+      return "<tr><td><span class=\"num\">" + esc(it.no) + "</span> " + esc(it.title) +
+        "</td><td>" + ((it.proposers || []).map(name).join(" · ") || "—") +
+        "</td><td>" + ((it.joint || []).map(name).join(" · ") || "—") +
+        "</td><td>" + ((it.links || []).map(function (id) {
+          return '<a class="src" href="log.html?id=' + encodeURIComponent(id) + '">' +
+            esc(id) + "</a>";
+        }).join(" · ") || "—") + "</td></tr>";
+    }).join("");
+
+    var pct = prd.total ? Math.round(prd.tracked / prd.total * 100) : 0;
+
+    // ── 사람 중심 (접어둠) ──
+    var per = (D.members || []).map(function (m) {
+      var lead = [], joint = [];
+      prd.items.forEach(function (it) {
+        if ((it.proposers || []).indexOf(m.name) >= 0) lead.push(it.no);
+        else if ((it.joint || []).indexOf(m.name) >= 0) joint.push(it.no);
+      });
+      return { m: m, lead: lead, joint: joint, total: lead.length + joint.length };
+    });
+    var top = Math.max.apply(null, per.map(function (x) { return x.total; }).concat([1]));
+
+    var perHtml = per.map(function (x) {
+      return '<div class="pbar"><div class="prow"><b>' + esc(x.m.display) + "</b>" +
+        "<span>발의 " + x.lead.length + " · 공동 " + x.joint.length + "</span></div>" +
+        '<div class="track"><i style="width:' +
+          Math.round(x.total / top * 100) + '%"></i></div>' +
+        '<small>' + (x.lead.concat(x.joint).join(" · ") || "아직 없습니다") + "</small></div>";
+    }).join("");
+
+    // 합류 시점이 다르면 막대 길이만 보고 판단하면 안 된다. 그걸 적어 둔다.
+    var joins = (D.members || []).filter(function (m) { return m.joined_at; });
+    var late = joins.length > 1
+      ? joins.slice().sort(function (a, b) { return a.joined_at < b.joined_at ? -1 : 1; }).pop()
+      : null;
+
+    $("main").innerHTML =
+      "<h1>기여 현황</h1>" +
+      '<p class="count">추적 ' + prd.tracked + "/" + prd.total + " (" + pct + "%)" +
+        (pct >= 80 ? " — 목표 80% 달성" : " — 목표 80% 미달") + "</p>" +
+      '<div class="tablewrap"><table class="grid">' +
+        "<thead><tr><th>PRD 항목</th><th>발의</th><th>공동</th><th>근거 기록</th></tr></thead>" +
+        "<tbody>" + rows + "</tbody></table></div>" +
+      "<details class=\"fold\"><summary>사람별로 보기</summary>" +
+        '<div class="fix">막대 길이는 순위가 아닙니다. 합류 시점과 맡은 일이 다릅니다.' +
+        (late ? "<br>" + esc(T.josa(late.display, "은는")) + " " + esc(ago(late.joined_at)) + " 합류했습니다." : "") +
+        "</div>" + perHtml +
+      "</details>";
+  });
+
+  var rt = { supabase: "실시간", none: "직접 열기", degraded: "실시간 꺼짐" };
+  var p = D.project || {};
+  $("foot").textContent =
+    (D.generated_at ? ago(D.generated_at) + " 갱신" : "") +
+    (p.realtime ? " · " + (rt[p.realtime] || p.realtime) : "");
+})();
+</script>
+</body>
+</html>

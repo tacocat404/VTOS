@@ -1,0 +1,6 @@
+{
+  "name": "vibe-team-os",
+  "description": "Git을 모르는 팀원들이 AI로 함께 기획하고 개발하게 해주는 팀 협업 시스템",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

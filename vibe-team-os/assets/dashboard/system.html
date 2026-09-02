@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="자동 기록·참여·보안이 실제로 돌고 있는지 봅니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◑</text></svg>">
+<title>설정</title>
+
+<!-- Pretendard. 못 받아오면 시스템 한글 글꼴로 물러선다 (file:// 로 열 때) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<!--
+  시스템 상태 — 조용한 실패를 없애는 화면 (docs/08-와이어프레임.md 9장)
+
+  화면 원칙
+   · Git·hook·스킬 용어를 쓰지 않는다. "폴더 신뢰", "공유 전 검사" 로 쓴다
+   · 공개 여부를 늘 보여준다. 세팅 때 한 번 경고하고 마는 건 위험하다 —
+     나중에 합류한 팀원은 그 경고를 못 봤다
+   · **모르는 것은 초록으로 칠하지 않는다.** 확인 못 한 항목은 따로 모아 그렇게 적는다
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header><div class="bar" id="bar"></div></header>
+  <main id="main" aria-label="시스템 상태"></main>
+  <footer id="foot"></footer>
+</div>
+
+<script src="data/dashboard.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var D = T.D, esc = T.esc, ago = T.ago;
+  var $ = function (id) { return document.getElementById(id); };
+
+  $("bar").innerHTML = T.nav("system.html");
+  if (!T.guard("main")) return;
+
+  T.run("main", function () {
+    var sys = D.system || {}, p = D.project || {}, out = [];
+
+    function section(title, rows) {
+      return '<section class="block"><h2>' + esc(title) + "</h2>" +
+        '<div class="stat">' + rows.join("") + "</div></section>";
+    }
+    // 상태는 셋뿐이다 — 정상 / 문제 / 모름. 모름을 정상으로 치지 않는다.
+    function row(state, name, detail, action) {
+      return '<div class="srow s-' + state + '">' +
+        '<span class="mark"></span>' +
+        "<div><b>" + esc(name) + "</b>" +
+        (detail ? "<small>" + esc(detail) + "</small>" : "") +
+        (action ? '<small class="act">→ ' + esc(action) + "</small>" : "") +
+        "</div></div>";
+    }
+
+    // ── 자동 기록 ──
+    var HOOK = {
+      active:    ["ok",   "정상"],
+      untrusted: ["bad",  "꺼져 있음 — 폴더 신뢰를 수락하지 않았습니다"],
+      failed:    ["bad",  "멈춤 — 턴은 세는데 정리가 안 되고 있습니다"],
+      unknown:   ["idk",  "모름 — 확인된 적이 없습니다"]
+    };
+    out.push(section("자동 기록", (D.members || []).map(function (m) {
+      var h = HOOK[m.hooks] || HOOK.unknown;
+      var when = m.hooks_checked_at ? " · " + ago(m.hooks_checked_at) + " 확인" : "";
+      return row(h[0], m.display, h[1] + when,
+        h[0] === "bad" ? 'Claude Code 를 다시 시작하고 "예"를 누르세요' : null);
+    })));
+
+    // ── 팀원 참여 ──
+    var INVITE = { accepted: ["ok", "참여 중"], pending: ["idk", "초대 수락 대기"],
+                   failed: ["bad", "초대 실패"] };
+    out.push(section("팀원 참여", (D.members || []).map(function (m) {
+      var v = INVITE[m.invite] || INVITE.pending;
+      return row(v[0], m.display, v[1] + " · 기록 " + m.logs + "건",
+        m.invite === "pending" ? "초대를 다시 보내세요" : null);
+    })));
+
+    // ── 보안 ──
+    var sec = [];
+    sec.push(p.visibility === "public"
+      ? row("bad", "이 저장소는 공개입니다", "기록이 팀 밖에서도 보입니다", "공개 범위를 확인하세요")
+      : row("ok", "이 저장소는 비공개입니다", "팀 밖에서는 보이지 않습니다"));
+    (sys.checks || []).forEach(function (c) {
+      sec.push(row(c.ok ? "ok" : "bad", c.name, c.detail,
+        c.ok ? null : "세팅을 다시 실행하세요"));
+    });
+    out.push(section("보안", sec));
+
+    // ── 연결된 도구 ──
+    // 명세만 읽는다. 실제로 깔렸는지는 이 화면이 알 수 없다 — 그래서 '모름'이다.
+    out.push(section("연결된 도구", (sys.skills || []).map(function (s) {
+      return row("idk", s.name, s.grade + " · 설치됐는지는 모릅니다");
+    })));
+
+    // ── 공유·화면 ──
+    var RT = { supabase: "실시간으로 공유합니다", none: "파일로만 주고받습니다",
+               degraded: "실시간이 꺼져 작업 상태만 늦게 반영됩니다" };
+    out.push(section("공유", [
+      row(sys.remote === "none" ? "idk" : "ok",
+          sys.remote === "none" ? "GitHub 를 쓰지 않습니다" : "GitHub 에 연결됨",
+          sys.remote === "none" ? "혼자 쓰는 설정입니다" : null),
+      row(p.realtime === "degraded" ? "bad" : "ok", "작업 상태 공유",
+          RT[p.realtime] || p.realtime),
+      row("ok", "이 화면", (D.generated_at ? ago(D.generated_at) + " 갱신" : "갱신 시각 없음"))
+    ]));
+
+    // ── 확인하지 않는 것 ──
+    // 빈칸으로 두면 "괜찮다"로 읽힌다. 무엇을 안 보는지 적어 둔다.
+    if ((sys.unknown || []).length) {
+      out.push('<section class="block"><h2>확인하지 않는 것</h2>' +
+        '<div class="fix">이 화면이 확인하지 못하는 항목입니다.<br>' +
+        sys.unknown.map(esc).join(" · ") + "</div></section>");
+    }
+
+    $("main").innerHTML = out.join("");
+  });
+
+  var rt = { supabase: "실시간", none: "직접 열기", degraded: "실시간 꺼짐" };
+  var p = D.project || {};
+  $("foot").textContent =
+    (D.generated_at ? ago(D.generated_at) + " 갱신" : "") +
+    (p.realtime ? " · " + (rt[p.realtime] || p.realtime) : "");
+})();
+</script>
+</body>
+</html>

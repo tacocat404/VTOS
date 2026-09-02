@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="팀이 지금 무엇을 하고 있는지, 무엇을 왜 정했는지 한눈에 봅니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◑</text></svg>">
+<title>팀 현황</title>
+
+<!-- Pretendard. 못 받아오면 시스템 한글 글꼴로 물러선다 (file:// 로 열 때) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<!--
+  대시보드 홈 — 생각의 피드 + (자리만 잡아둔) 브리핑
+
+  데이터는 window.DASHBOARD 에서 온다. 계약은 data.sample.js 참조.
+  fetch 를 쓰지 않는 이유는 file:// 에서 CORS 로 막히기 때문이다.
+
+  화면 원칙 (docs/08-와이어프레임.md)
+   · 3초 스캔용이다. 정독이 아니다 — 랜딩 페이지가 아니라 매일 쓰는 도구다
+   · 기록의 "왜"를 카드에 그대로 노출한다 — 열지 않아도 읽히게
+   · Git 용어를 쓰지 않는다
+   · 조용한 실패 금지 — 자동 기록 꺼짐·초대 대기는 맨 위에
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header><div class="bar" id="bar"></div></header>
+  <section class="alerts" id="alerts" aria-label="확인이 필요한 것"></section>
+  <section class="brief-slot" id="brief"></section>
+  <div class="cols">
+    <main id="feed" aria-label="팀의 결정 기록"></main>
+    <aside id="side" aria-label="요약"></aside>
+  </div>
+  <footer id="foot"></footer>
+</div>
+
+<script src="data/dashboard.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var D = T.D, esc = T.esc, ago = T.ago;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // 데이터가 아예 없을 때도 화면이 죽지 않아야 한다.
+  if (!D) {
+    $("feed").innerHTML =
+      '<p class="empty">세팅이 끝나면 여기가 채워집니다.</p>';
+    return;
+  }
+
+  var STATE = { working: ["on", "작업 중"], idle: ["off", "대기"],
+                away: ["off", "자리 비움"], left: ["off", "이탈"] };
+
+
+  // ── 머리말 ──
+  $("bar").innerHTML = T.nav("index.html");
+
+  // 그리다 터져도 빈 화면이 되지 않게 감싼다.
+  // 빈 화면은 "기록이 없다"로 읽힌다 — 실제로는 코드가 죽은 것인데.
+  T.run("feed", function () {
+
+  // ── 경고 — 조용한 실패를 막는 자리다. 맨 위에 둔다 ──
+  $("alerts").innerHTML = (D.alerts || []).map(function (a) {
+    return '<div class="alert ' + (a.level === "info" ? "info" : "") + '">' +
+      "<b>" + esc(a.title) + "</b>" +
+      (a.detail ? "<p>" + esc(a.detail) + "</p>" : "") +
+      (a.action ? '<div class="do">→ ' + esc(a.action) + "</div>" : "") + "</div>";
+  }).join("");
+
+  // ── 브리핑 자리 ──
+  // 규칙 기반 알림(질문 정체·미시작 팀원)부터 채운다. AI 판단이 필요한
+  // "결정 충돌"은 검증 뒤에 넣는다 — 오판이 조용히 굳으면 안 되기 때문이다.
+  $("brief").textContent =
+    "지금 알아야 할 것 — 준비 중입니다.";
+
+  // ── 피드 — 이 화면의 주인공 ──
+  // 카드에 "왜"를 그대로 노출한다. 열어보지 않아도 읽히게 하는 것이 목적이다.
+  var feed = D.feed || [];
+  $("feed").innerHTML = feed.length ? feed.map(function (f, i) {
+    var unconf = f.confidence === "unconfirmed";
+    var dead = f.status === "폐기";
+    var links = (f.links || []).length
+      ? (f.links || []).map(function (l) { return "→ " + esc(l); }).join(" ")
+      : (f.orphan ? "목차 밖" : "");
+    return '<article class="card' + (dead ? " dead" : "") + '" style="--i:' + i + '">' +
+      '<div class="meta">' +
+        "<span>" + esc(f.display || f.author) + "</span>" +
+        '<span class="num">' + esc(ago(f.at)) + "</span>" +
+        '<span class="tag t-' + esc(f.status) + '">' + esc(f.status) + "</span>" +
+        (f.topic ? '<span class="tag ' + esc(f.cat || '') + '">' + esc(f.topic) + "</span>" : "") +
+      "</div>" +
+      "<h3>" + esc(f.title) + "</h3>" +
+      (unconf
+        ? '<p class="need">왜 그렇게 정했는지가 비어 있습니다 — 확인해 주세요</p>'
+        : '<p class="why">' + esc(f.why) + "</p>") +
+      '<div class="foot">' +
+        (links ? "<span>" + links + "</span>" : "") +
+        (f.open_question ? '<span class="q">? ' + esc(f.open_question) + "</span>" : "") +
+        '<span class="num">' + esc(f.id) + "</span>" +
+      "</div></article>";
+  }).join("")
+    : '<p class="empty">아직 기록이 없습니다.</p>';
+
+  // ── 곁줄 ──
+  var st = D.stats || {}, qs = D.questions || [], orp = D.orphans || [];
+  var side = "";
+
+  // 머리말은 화면 이동에 내줬다. 누가 지금 무엇을 하는지는 여기로 옮겼다 —
+  // 정보를 없앤 게 아니라 자리를 바꾼 것이다.
+  side += "<section><h4>지금</h4>" + (D.members || []).map(function (m) {
+    var st = STATE[m.state] || STATE.idle;
+    var pend = m.invite === "pending";
+    return '<div class="row"><span><i class="dot ' + (pend ? "wait" : st[0]) + '"></i>' +
+      esc(m.display) + "</span><b>" +
+      esc(pend ? "초대 대기" : (m.task || st[1])) + "</b></div>";
+  }).join("") + "</section>";
+
+  side += "<section><h4>답을 기다리는 질문</h4>" + (qs.length
+    ? qs.map(function (q) {
+        return '<div class="qitem' + (q.days >= 3 ? " hot" : "") + '">' +
+          esc(q.text) + "<small>" + esc(q.display || q.author) +
+          ' · <span class="num">' + esc(q.days) + "</span>일째" +
+          (q.impact ? " · " + esc(q.impact) : "") + "</small></div>";
+      }).join("")
+    : '<p class="empty">없습니다.</p>') + "</section>";
+
+  if (st.unconfirmed) {
+    side += '<section><h4>확인이 필요한 기록</h4><div class="qitem hot">' +
+      '<span class="num">' + esc(st.unconfirmed) + "</span>건" +
+      "<small>왜 그렇게 정했는지가 비어 있습니다. " +
+      "오래될수록 채우기 어렵습니다.</small></div></section>";
+  }
+
+  if (orp.length) {
+    side += "<section><h4>목차 밖 아이디어</h4>" + orp.map(function (o) {
+      return '<div class="row"><span>' + esc(o.topic) + "</span><b>" +
+        esc(o.count) + "</b></div>";
+    }).join("") + "</section>";
+  }
+
+  var by = st.by_member || {};
+  side += "<section><h4>기록</h4>" + (D.members || []).map(function (m) {
+    return '<div class="row"><span>' + esc(m.display) + "</span><b>" +
+      esc(by[m.name] || 0) + "</b></div>";
+  }).join("") +
+    '<div class="row total"><span>모두</span><b>' +
+    esc(st.logs_total || 0) + "</b></div></section>";
+
+  $("side").innerHTML = side;
+
+  // ── 꼬리말 ──
+  var p = D.project || {};
+  var rt = { supabase: "실시간", none: "직접 열기", degraded: "실시간 꺼짐" };
+  $("foot").textContent =
+    (D.generated_at ? ago(D.generated_at) + " 갱신" : "") +
+    (p.realtime ? " · " + (rt[p.realtime] || p.realtime) : "") +
+    (p.mode === "solo" ? " · 혼자 쓰는 중" : "");
+
+  // realtime:none 이면 배포된 파일을 보는 것이라 주기적으로 다시 읽는다.
+  // supabase 모드에서는 웹소켓이 대신하므로 새로고침하지 않는다.
+  if (p.realtime !== "supabase" && location.protocol.indexOf("http") === 0) {
+    setTimeout(function () { location.reload(); }, 60000);
+  }
+  });
+})();
+</script>
+</body>
+</html>

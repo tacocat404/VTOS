@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="팀이 남긴 결정 기록을 사람·상태·주제로 추려 봅니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◑</text></svg>">
+<title>기록</title>
+
+<!-- Pretendard. 못 받아오면 시스템 한글 글꼴로 물러선다 (file:// 로 열 때) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<!--
+  기록 목록 — 원하는 기록을 찾는 화면 (docs/08-와이어프레임.md 3장)
+
+  화면 원칙
+   · 사람 거르개가 곧 「팀원 상세」다. 화면을 하나 줄이면 팀원이 외울 게 준다
+   · 「확인 필요」는 목록에 묻으면 안 된다 — 맨 위 거르개로 뺀다.
+     근거 없는 기록이 방치되면 틀린 기록이 사실로 굳는다
+   · 「폐기」는 지우지 않고 취소선으로. 안 하기로 한 것도 정보다
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header><div class="bar" id="bar"></div></header>
+  <main id="main" aria-label="결정 기록">
+    <div class="filters" id="filters"></div>
+    <p class="count" id="count"></p>
+    <div id="list"></div>
+  </main>
+  <footer id="foot"></footer>
+</div>
+
+<script src="data/dashboard.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var D = T.D, esc = T.esc, ago = T.ago;
+  var $ = function (id) { return document.getElementById(id); };
+
+  $("bar").innerHTML = T.nav("logs.html");
+  if (!T.guard("list")) return;
+
+  var LOGS = D.logs || [];
+  var pick = { who: null, status: null, attention: false, q: "" };
+
+  function match(l) {
+    if (pick.who && l.author !== pick.who) return false;
+    if (pick.status && l.status !== pick.status) return false;
+    if (pick.attention && l.confidence !== "unconfirmed") return false;
+    if (pick.q) {
+      var hay = [l.title, l.why, l.topic, l.id, l.display].join(" ").toLowerCase();
+      if (hay.indexOf(pick.q.toLowerCase()) < 0) return false;
+    }
+    return true;
+  }
+
+  function chip(on, label, n, cls) {
+    return '<button class="chip ' + (cls || "") + '" aria-pressed="' + (on ? "true" : "false") +
+      '">' + esc(label) + (n == null ? "" : '<span class="n">' + n + "</span>") + "</button>";
+  }
+
+  function drawFilters() {
+    var byWho = {}, byStatus = {}, att = 0;
+    LOGS.forEach(function (l) {
+      byWho[l.author] = (byWho[l.author] || 0) + 1;
+      byStatus[l.status] = (byStatus[l.status] || 0) + 1;
+      if (l.confidence === "unconfirmed") att++;
+    });
+
+    var who = [chip(!pick.who, "전체", LOGS.length)];
+    (D.members || []).forEach(function (m) {
+      who.push(chip(pick.who === m.name, m.display, byWho[m.name] || 0));
+    });
+
+    var st = [chip(!pick.status, "모든 상태")];
+    ["논의중", "결정됨", "보류", "폐기"].forEach(function (s) {
+      if (byStatus[s]) st.push(chip(pick.status === s, s, byStatus[s]));
+    });
+
+    $("filters").innerHTML =
+      '<div class="chips" id="who">' + who.join("") + "</div>" +
+      '<div class="chips" id="status">' + st.join("") + "</div>" +
+      (att ? '<div class="chips" id="att">' +
+        chip(pick.attention, "확인 필요", att, "alarm") + "</div>" : "") +
+      '<input class="search" id="q" type="search" placeholder="검색" value="' +
+        esc(pick.q) + '" aria-label="기록 검색">';
+
+    bind("who", function (i) { pick.who = i === 0 ? null : (D.members || [])[i - 1].name; });
+    bind("status", function (i, el) { pick.status = i === 0 ? null : el.firstChild.nodeValue.trim(); });
+    if (att) bind("att", function () { pick.attention = !pick.attention; });
+
+    var q = $("q");
+    q.oninput = function () { pick.q = q.value; draw(); };
+    if (document.activeElement !== q && pick.q) { q.focus(); q.setSelectionRange(9999, 9999); }
+  }
+
+  function bind(id, fn) {
+    var els = $(id).querySelectorAll(".chip");
+    Array.prototype.forEach.call(els, function (el, i) {
+      el.onclick = function () { fn(i, el); draw(); };
+    });
+  }
+
+  function draw() {
+    drawFilters();
+    var rows = LOGS.filter(match);
+
+    $("count").textContent = rows.length === LOGS.length
+      ? LOGS.length + "건"
+      : rows.length + "건 / 전체 " + LOGS.length + "건";
+
+    if (!rows.length) {
+      $("list").innerHTML = '<p class="empty">고른 조건에 맞는 기록이 없습니다.</p>';
+      return;
+    }
+
+    $("list").innerHTML = rows.map(function (l, i) {
+      var unconf = l.confidence === "unconfirmed";
+      var dead = l.status === "폐기";
+      var links = (l.links || []).map(function (x) { return "→ " + esc(x); }).join(" ") ||
+        (l.orphan ? "목차 밖" : "");
+      return '<a class="card' + (dead ? " dead" : "") + (unconf ? " att" : "") +
+        '" href="log.html?id=' + encodeURIComponent(l.id) + '" style="--i:' + i + '">' +
+        '<div class="meta">' +
+          "<span>" + esc(l.display || l.author) + "</span>" +
+          '<span class="num">' + esc(ago(l.at)) + "</span>" +
+          '<span class="tag t-' + esc(l.status) + '">' + esc(l.status) + "</span>" +
+          (l.topic ? '<span class="tag ' + esc(l.cat || '') + '">' + esc(l.topic) + "</span>" : "") +
+        "</div>" +
+        "<h3>" + esc(l.title) + "</h3>" +
+        (unconf
+          ? '<p class="need">왜 그렇게 정했는지가 비어 있습니다 — 확인해 주세요</p>'
+          : '<p class="why">' + esc(l.why) + "</p>") +
+        '<div class="foot">' +
+          (links ? "<span>" + links + "</span>" : "") +
+          (l.open_question ? '<span class="q">? ' + esc(l.open_question) + "</span>" : "") +
+          '<span class="num">' + esc(l.id) + "</span>" +
+        "</div></a>";
+    }).join("");
+  }
+
+  T.run("list", draw);
+
+  var rt = { supabase: "실시간", none: "직접 열기", degraded: "실시간 꺼짐" };
+  var p = D.project || {};
+  $("foot").textContent =
+    (D.generated_at ? ago(D.generated_at) + " 갱신" : "") +
+    (p.realtime ? " · " + (rt[p.realtime] || p.realtime) : "");
+})();
+</script>
+</body>
+</html>

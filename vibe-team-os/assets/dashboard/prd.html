@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="확정된 PRD를 읽으면서 각 항목이 누구에게서 나왔는지 봅니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◑</text></svg>">
+<title>PRD</title>
+
+<!-- Pretendard. 못 받아오면 시스템 한글 글꼴로 물러선다 (file:// 로 열 때) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<!--
+  PRD 뷰어 — 문서를 읽으면서 누가 냈는지 본다 (docs/08-와이어프레임.md 6장)
+
+  화면 원칙
+   · 기여 배지를 항목마다 붙인다. 읽는 흐름을 끊지 않으면서 출처가 늘 보인다
+   · **추적 실패를 숨기지 않는다.** 목표가 80%라 20%는 원래 못 잡는다 —
+     조용히 비워두면 발표 때 구멍이 된다
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header><div class="bar" id="bar"></div></header>
+  <main id="main" aria-label="PRD"></main>
+  <footer id="foot"></footer>
+</div>
+
+<script src="data/dashboard.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var D = T.D, esc = T.esc, ago = T.ago;
+  var $ = function (id) { return document.getElementById(id); };
+
+  $("bar").innerHTML = T.nav("prd.html");
+  if (!T.guard("main")) return;
+
+  T.run("main", function () {
+    var prd = D.prd;
+    if (!prd) {
+      $("main").innerHTML =
+        '<p class="empty">아직 PRD 가 없습니다. 기획을 합치면 여기에 생깁니다.</p>';
+      return;
+    }
+
+    var who = {};
+    (D.members || []).forEach(function (m) { who[m.name] = m.display; });
+    var name = function (n) { return esc(who[n] || n); };
+
+    var toc = prd.items.map(function (it) {
+      return '<a class="toc-item' + (it.untracked ? " untracked" : "") +
+        '" href="#i' + esc(it.no) + '"><span class="num">' + esc(it.no) +
+        "</span> " + esc(it.title) + "</a>";
+    }).join("");
+
+    var body = prd.items.map(function (it) {
+      var badge;
+      if (it.untracked) {
+        // 못 찾았으면 못 찾았다고 쓴다. 빈칸으로 두면 발표 때 구멍이 된다.
+        badge = '<div class="who-box miss">' +
+          "<b>발의자를 특정하지 못했습니다</b>" +
+          "<small>연결된 기록이 없습니다</small></div>";
+      } else {
+        var lead = (it.proposers || []).map(name).join(" · ");
+        var joint = (it.joint || []).map(name).join(" · ");
+        badge = '<div class="who-box"><dl class="rows">' +
+          "<dt>발의</dt><dd>" + (lead || "—") +
+          (joint ? ' <span class="tag">공동 ' + joint + "</span>" : "") + "</dd>" +
+          "<dt>근거</dt><dd>" +
+          ((it.links || []).length
+            ? it.links.map(function (id) {
+                return '<a class="src" href="log.html?id=' + encodeURIComponent(id) + '">' +
+                  esc(id) + "</a>";
+              }).join(" · ")
+            : "—") +
+          "</dd></dl></div>";
+      }
+      return '<section class="prd-item" id="i' + esc(it.no) + '">' +
+        '<h2><span class="num">' + esc(it.no) + "</span> " + esc(it.title) + "</h2>" +
+        badge +
+        '<p class="prose">' + esc(it.body) + "</p></section>";
+    }).join("");
+
+    var miss = prd.total - prd.tracked;
+    $("main").innerHTML =
+      '<div class="prd-head"><h1>PRD</h1>' +
+        '<span class="phase">' + esc(prd.version) +
+        (prd.confirmed_at ? " · " + esc(ago(prd.confirmed_at)) + " 확정" : "") + "</span>" +
+        '<span class="count">항목 ' + prd.total + "건 · 출처 확인 " + prd.tracked + "건" +
+        (miss ? " · 못 찾음 " + miss + "건" : "") + "</span></div>" +
+      '<div class="prd-cols"><nav class="toc" aria-label="목차">' + toc + "</nav>" +
+      "<div>" + body + "</div></div>";
+  });
+
+  var rt = { supabase: "실시간", none: "직접 열기", degraded: "실시간 꺼짐" };
+  var p = D.project || {};
+  $("foot").textContent =
+    (D.generated_at ? ago(D.generated_at) + " 갱신" : "") +
+    (p.realtime ? " · " + (rt[p.realtime] || p.realtime) : "");
+})();
+</script>
+</body>
+</html>

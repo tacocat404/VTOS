@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="언제 무엇을 정했는지 시간 순으로 되짚습니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◑</text></svg>">
+<title>이력</title>
+
+<!-- Pretendard. 못 받아오면 시스템 한글 글꼴로 물러선다 (file:// 로 열 때) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<!--
+  이력 — "우리가 언제 뭘 했나"를 되짚는 화면 (docs/08-와이어프레임.md 8장)
+
+  화면 원칙
+   · **판단 변경을 결정과 따로 표시한다.** 발표에서 제일 잘 먹히는 대목인데
+     결정 목록에 섞이면 묻힌다
+   · 시간 순이다. 기록 목록은 찾는 화면이고 이력은 되짚는 화면이라 정렬이 반대다
+   · 폐기된 것도 남긴다. 안 하기로 한 것도 이력이다
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header><div class="bar" id="bar"></div></header>
+  <main id="main" aria-label="진행 이력">
+    <p class="count" id="count"></p>
+    <div id="line"></div>
+    <div id="tally"></div>
+  </main>
+  <footer id="foot"></footer>
+</div>
+
+<script src="data/dashboard.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var D = T.D, esc = T.esc, ago = T.ago;
+  var $ = function (id) { return document.getElementById(id); };
+
+  $("bar").innerHTML = T.nav("history.html");
+  if (!T.guard("line")) return;
+
+  T.run("line", function () {
+    var logs = (D.logs || []).slice();
+    var st = D.stats || {};
+
+    function day(iso) {
+      if (!iso) return "";
+      var d = new Date(iso);
+      return (d.getMonth() + 1) + "/" + String(d.getDate()).padStart(2, "0");
+    }
+
+    // 시간 순. 기록 목록은 찾는 화면이라 최신순이고, 여기는 되짚는 화면이라 반대다.
+    var events = [];
+
+    if (st.first) {
+      events.push({ at: st.first, kind: "start", text: "프로젝트 시작",
+                    sub: (D.members || []).length + "명" });
+    }
+
+    // 사람마다 첫 기록이 언제였나 — 누가 언제 합류해 움직였는지가 보인다
+    var seen = {};
+    logs.slice().sort(function (a, b) { return (a.at || "") < (b.at || "") ? -1 : 1; })
+      .forEach(function (l) {
+        if (l.author && !seen[l.author]) {
+          seen[l.author] = true;
+          events.push({ at: l.at, kind: "join",
+                        text: (l.display || l.author) + " 첫 기록", sub: l.topic || "" });
+        }
+      });
+
+    logs.forEach(function (l) {
+      // 판단 변경은 결정과 기호를 나눈다. 섞으면 묻힌다.
+      var kind = (l.supersedes || []).length ? "turn"
+               : l.status === "폐기" ? "drop"
+               : l.status === "결정됨" ? "decide" : "talk";
+      events.push({
+        at: l.at, kind: kind, text: l.title, id: l.id,
+        who: l.display || l.author,
+        sub: (l.supersedes || []).length ? l.supersedes.join(" · ") + " 를 뒤집음" : ""
+      });
+    });
+
+    events.sort(function (a, b) { return (a.at || "") < (b.at || "") ? -1 : 1; });
+
+    var MARK = { start: "▣", join: "○", decide: "◆", turn: "◈", drop: "×", talk: "·" };
+    var NAME = { decide: "결정", turn: "판단 변경", drop: "폐기", talk: "논의" };
+
+    $("count").textContent = st.first
+      ? day(st.first) + " 부터 · " + (st.days || 0) + "일째"
+      : "";
+
+    $("line").innerHTML = events.map(function (e, i) {
+      return '<div class="ev k-' + e.kind + '" style="--i:' + i + '">' +
+        '<span class="when num">' + esc(day(e.at)) + "</span>" +
+        '<span class="pip">' + MARK[e.kind] + "</span>" +
+        '<div class="body">' +
+          (e.who ? '<span class="who2">' + esc(e.who) + "</span>" : "") +
+          (NAME[e.kind] ? '<span class="kind">' + NAME[e.kind] + "</span>" : "") +
+          (e.id
+            ? '<a class="src" href="log.html?id=' + encodeURIComponent(e.id) + '">' +
+              esc(e.text) + "</a>"
+            : "<b>" + esc(e.text) + "</b>") +
+          (e.sub ? "<small>" + esc(e.sub) + "</small>" : "") +
+        "</div></div>";
+    }).join("");
+
+    // 세어보기. 판단 변경이 0이면 0이라고 쓴다 — 없는 걸 숨기지 않는다.
+    var n = { decide: 0, turn: 0, drop: 0, talk: 0 };
+    events.forEach(function (e) { if (n[e.kind] !== undefined) n[e.kind]++; });
+    $("tally").innerHTML = '<div class="fix">' +
+      ["decide", "turn", "drop", "talk"].map(function (k) {
+        return MARK[k] + " " + NAME[k] + " " + n[k];
+      }).join("&nbsp; · &nbsp;") + "</div>";
+  });
+
+  var rt = { supabase: "실시간", none: "직접 열기", degraded: "실시간 꺼짐" };
+  var p = D.project || {};
+  $("foot").textContent =
+    (D.generated_at ? ago(D.generated_at) + " 갱신" : "") +
+    (p.realtime ? " · " + (rt[p.realtime] || p.realtime) : "");
+})();
+</script>
+</body>
+</html>

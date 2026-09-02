@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="답을 못 찾은 질문을 오래된 순으로 봅니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◑</text></svg>">
+<title>질문</title>
+
+<!-- Pretendard. 못 받아오면 시스템 한글 글꼴로 물러선다 (file:// 로 열 때) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<!--
+  미해결 질문 — 막힌 걸 푸는 화면 (docs/08-와이어프레임.md 5장)
+
+  화면 원칙
+   · 정렬이 최신순이 아니라 **오래된 순**. 오래 방치될수록 위험하다
+   · 질문만 나열하면 아무도 안 답한다. **뭐가 막혀 있는지**를 같이 보여준다
+   · 답은 원본 기록에 붙는다. 다른 데 답하면 맥락이 사라진다
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header><div class="bar" id="bar"></div></header>
+  <main id="main" aria-label="답을 기다리는 질문">
+    <p class="count" id="count"></p>
+    <div id="list"></div>
+  </main>
+  <footer id="foot"></footer>
+</div>
+
+<script src="data/dashboard.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var D = T.D, esc = T.esc, ago = T.ago;
+  var $ = function (id) { return document.getElementById(id); };
+
+  $("bar").innerHTML = T.nav("questions.html");
+  if (!T.guard("list")) return;
+
+  T.run("list", function () {
+    // 빌더가 이미 오래된 순으로 정렬해 보낸다. 여기서 다시 뒤집지 않는다.
+    var qs = D.questions || [];
+
+    $("count").textContent = qs.length ? qs.length + "건" : "";
+
+    if (!qs.length) {
+      $("list").innerHTML = '<p class="empty">답을 기다리는 질문이 없습니다.</p>';
+      return;
+    }
+
+    $("list").innerHTML = qs.map(function (q, i) {
+      // 3일이 넘으면 붉게. 오래 방치된 질문이 제일 위험하다.
+      var stuck = q.days >= 3;
+      return '<article class="card' + (stuck ? " att" : "") + '" style="--i:' + i + '">' +
+        '<div class="meta">' +
+          // 0일째는 사람 말이 아니다
+          '<span class="num">' + (q.days ? esc(q.days) + "일째" : "오늘") + "</span>" +
+          "<span>" + esc(q.display || q.author) + "</span>" +
+        "</div>" +
+        "<h3>" + esc(q.text) + "</h3>" +
+        // 영향 범위가 없으면 지어내지 않는다. 빈칸이 곧 "아직 모른다"다.
+        (q.impact ? '<p class="need">' + esc(q.impact) + "</p>" : "") +
+        '<div class="foot">' +
+          (q.from
+            ? '<a class="src" href="log.html?id=' + encodeURIComponent(q.from) + '">' +
+              esc(q.from) + " 에서 나옴</a>"
+            : "") +
+        "</div></article>";
+    }).join("");
+  });
+
+  var rt = { supabase: "실시간", none: "직접 열기", degraded: "실시간 꺼짐" };
+  var p = D.project || {};
+  $("foot").textContent =
+    (D.generated_at ? ago(D.generated_at) + " 갱신" : "") +
+    (p.realtime ? " · " + (rt[p.realtime] || p.realtime) : "");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="기록 하나를 원문 그대로 읽고, 틀렸으면 고칩니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◑</text></svg>">
+<title>기록 상세</title>
+
+<!-- Pretendard. 못 받아오면 시스템 한글 글꼴로 물러선다 (file:// 로 열 때) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<!--
+  로그 상세 — 하나를 읽고, 틀렸으면 고치는 화면 (docs/08-와이어프레임.md 4장)
+
+  화면 원칙
+   · 「요청」은 사용자가 한 말 그대로 싣는다. 요약하면 AI 해석이 의심스러울 때
+     원문과 대조할 수 없어 이 화면의 존재 이유가 사라진다
+   · 「실제 목적」이 비어 있으면 채우지 않는다. 빈칸이 곧 신호다
+
+  와이어프레임의 [고치기 ✎] 버튼은 두지 않았다.
+  이 화면은 정적 파일이라 아무것도 쓸 수 없다 — 버튼을 그려두면 눌러도
+  아무 일이 없는 가짜가 된다. 대신 Claude 에게 무엇을 말하면 되는지 적어 둔다.
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header><div class="bar" id="bar"></div></header>
+  <main class="detail" id="main" aria-label="기록 상세"></main>
+  <footer id="foot"></footer>
+</div>
+
+<script src="data/dashboard.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var D = T.D, esc = T.esc, ago = T.ago;
+  var $ = function (id) { return document.getElementById(id); };
+
+  $("bar").innerHTML = T.nav("logs.html");
+  if (!T.guard("main")) return;
+
+  T.run("main", function () {
+  var want = new URLSearchParams(location.search).get("id");
+  var l = (D.logs || []).filter(function (x) { return x.id === want; })[0];
+
+  if (!l) {
+    $("main").innerHTML = '<a class="back" href="logs.html">← 기록으로</a>' +
+      '<p class="empty">' + (want ? esc(want) + " 을 찾지 못했습니다."
+                                  : "어떤 기록인지 지정되지 않았습니다.") + "</p>";
+    return;
+  }
+
+  var d = l.detail || {};
+  var it = d.intent || {};
+  var unconf = l.confidence === "unconfirmed";
+  var out = [];
+
+  out.push('<a class="back" href="logs.html">← 기록으로</a>');
+  out.push("<h1>" + esc(l.title) + "</h1>");
+  out.push('<div class="stamp">' +
+    "<span>" + esc(l.display || l.author) + "</span>" +
+    '<span class="num">' + esc(l.at ? l.at.slice(0, 16).replace("T", " ") : "") + "</span>" +
+    '<span class="tag t-' + esc(l.status) + '">' + esc(l.status) + "</span>" +
+    (l.topic ? '<span class="tag ' + esc(l.cat || '') + '">' + esc(l.topic) + "</span>" : "") +
+    '<span class="num">' + esc(l.id) + "</span></div>");
+
+  if (d.request) {
+    out.push('<div class="block"><h2>요청</h2>' +
+      '<div class="quote">' + esc(d.request) + "</div></div>");
+  }
+
+  // 비어 있으면 비어 있다고 쓴다. 여기서 그럴듯하게 채우면
+  // 본인이 하지도 않은 생각이 기록으로 굳고 발표 자료까지 간다.
+  out.push('<div class="block"><h2>의도 분석</h2><dl class="rows">' +
+    "<dt>표면 요청</dt><dd>" + (it.surface ? esc(it.surface) : '<span class="blank">비어 있음</span>') + "</dd>" +
+    "<dt>실제 목적</dt><dd" + (it.purpose ? ">" + esc(it.purpose) : ' class="blank">확인 안 됨') + "</dd>" +
+    "<dt>근거</dt><dd" + (it.evidence ? ">" + esc(it.evidence) : ' class="blank">없음') + "</dd>" +
+    "</dl></div>");
+
+  if ((d.asked || []).length) {
+    out.push('<div class="block"><h2>확인 질문</h2><div class="qa">' +
+      d.asked.map(function (a) {
+        return "<b>" + esc(a.kind) + "</b><span>" + esc(a.text) + "</span>";
+      }).join("") + "</div></div>");
+  }
+
+  if (d.decision) {
+    out.push('<div class="block"><h2>결정</h2>' +
+      '<div class="prose">' + esc(d.decision) + "</div></div>");
+  }
+
+  if (d.why_not) {
+    out.push('<div class="block"><h2>왜 다른 안을 안 골랐나</h2>' +
+      '<div class="prose">' + esc(d.why_not) + "</div></div>");
+  }
+
+  if ((d.open_questions || []).length) {
+    out.push('<div class="block"><h2>남은 질문</h2><ul class="oq">' +
+      d.open_questions.map(function (q) { return "<li>" + esc(q) + "</li>"; }).join("") +
+      "</ul></div>");
+  }
+
+  var where = (l.links || []).length ? l.links.map(esc).join(" · ")
+            : (l.orphan ? "아직 목차에 붙지 않았습니다" : "");
+  if (where) {
+    out.push('<div class="block"><h2>반영된 곳</h2><div class="prose">' + where + "</div></div>");
+  }
+
+  // 고치는 방법. 버튼이 아니라 말할 문장을 준다 —
+  // 이 화면은 아무것도 저장할 수 없고, 실제로 고치는 것은 Claude 다.
+  out.push('<div class="block"><h2>고치기</h2><div class="fix">' +
+    // 카드에서 이미 「비어 있습니다」를 봤다. 여기서 또 훈계하지 않고 할 일만 준다.
+    (unconf ? "왜 그렇게 정했는지가 비어 있습니다.<br>"
+            : "틀렸으면 Claude 에게 말하면 고칩니다.<br>") +
+    "<code>" + esc(l.id) + " 고쳐줘</code> 라고 하면 됩니다." +
+    (l.path ? '<br><span class="num" style="opacity:.7">' + esc(l.path) + "</span>" : "") +
+    "</div></div>");
+
+  $("main").innerHTML = out.join("");
+
+  var rt = { supabase: "실시간", none: "직접 열기", degraded: "실시간 꺼짐" };
+  var p = D.project || {};
+  $("foot").textContent =
+    (D.generated_at ? ago(D.generated_at) + " 갱신" : "") +
+    (p.realtime ? " · " + (rt[p.realtime] || p.realtime) : "");
+  });
+})();
+</script>
+</body>
+</html>
